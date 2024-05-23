@@ -630,9 +630,7 @@ def ignore_extended_attributes(func, filename, exc_info):
 def analyze(srcml: Srcml, issues):
     global cc
     logger.success("Library analysis complete")
-    if os.path.exists(test_location):
-        shutil.rmtree(test_location, onerror=ignore_extended_attributes)
-    os.makedirs(test_location)
+    os.makedirs(test_location, exist_ok=True)
     if bug_timeline_targets_run:
         bug_timeline_targets = []
         for issue in issues:
@@ -692,10 +690,13 @@ def analyze(srcml: Srcml, issues):
                 func, concat_locations = minimize_target(srcml, issue)
                 if func is None:
                     continue
-                remove_binary(issue)
+                # remove_binary(issue)
                 # concat_locations = construct_concat_locations(issue)
                 add_main(issue, func, concat_locations)
-
+            info_path = issue.test_file_path[:-2] + ".json"
+            logger.info("Writing commands to {}", info_path)
+            with open(info_path, "w") as f:
+                json.dump(issue.commands, f)
             # concat_locs.append(issue.test_file_path)
             # compile_command, linker_locs, additional_linker = process_compile_command(issue.ref_loc)
             # with open(issue.test_file_path[:-2] + "_final.c", 'wb') as wfd:
@@ -731,7 +732,7 @@ def run_clang_format():
 
 def linker_checks(issue, concat_locations, link=True, final=False):
     out_locations = []
-    commands_used = {"compile": [], "link": []}
+    commands_used = {"loc": [], "compile": [], "link": []}
 
     # add_loc_keys = set()
     # if len(concat_locations) == 1:
@@ -763,6 +764,7 @@ def linker_checks(issue, concat_locations, link=True, final=False):
         # else:
         #     command = loc_info["compile_command"] + f" -w -c {loc} -o {out_loc}"
         logger.debug(command)
+        commands_used["loc"].append(loc)
         commands_used["compile"].append(command)
         result = subprocess.run(shlex.split(command), stderr=subprocess.PIPE)
         # if result.stderr:
@@ -1166,10 +1168,12 @@ def prep_preprocessed_output(location):
                     else:
                         lines.append(l + "\n")
 
-        src_name = src_name.replace("../", "")
-
+        src_name = src_name.replace("../", "", 1)
         fixed_lines = fix_srcml_bugs(lines)
-        with open(os.path.join(temp_loc, src_name), "w") as fp:
+        src_path = os.path.join(temp_loc, src_name)
+        directory_path = os.path.dirname(src_path)
+        os.makedirs(directory_path, exist_ok=True)
+        with open(src_path, "w") as fp:
             fp.write(fixed_lines)
         files = [path.rsplit(".", 1)[0] + ext for ext in (".i", ".s", ".d")]
         for f in files:
@@ -1222,27 +1226,6 @@ if __name__ == "__main__":
             issues.append(Issue(test_location, file_tloc, lineno))
     if not log_report:
         analyze(lib_srcml, issues)
-        try:
-            Fuzzer.fuzz_binaries(test_library, fuzz_tool)
-        except timeout_decorator.TimeoutError:
-            logger.error("Fuzzing timed out")
     else:
         for issue in issues:
-            start = time.time()
             analyze(lib_srcml, [issue])
-            compilable_slice = time.time()
-            try:
-                fuzz_data = Fuzzer.fuzz_binaries(test_library, fuzz_tool)
-            except timeout_decorator.TimeoutError:
-                fuzz_data = {"timed_out":True}
-            fuzzing_ends = time.time()
-            fuzz_data["time_compile"] = compilable_slice - start
-            fuzz_data["time_fuzz"] = fuzzing_ends - compilable_slice
-            fuzz_data["time_total"] = fuzzing_ends - start
-            fuzz_data["issue"] = issue.id + ":" + str(issue.orig_line)
-            with open(log_location, "a") as fp:
-                fp.write(json.dumps(fuzz_data)+"\n")
-    # for filename in iglob(test_location+'/**/*.c*',
-    #                        recursive = True):
-    #     remove_linemarkers(filename)
-    # run_clang_format()
