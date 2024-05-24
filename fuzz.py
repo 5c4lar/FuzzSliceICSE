@@ -171,7 +171,7 @@ class Aflfuzz:
         results = []
         for line in lines:
             if '<td class="headerCovTableEntry">' in line:
-                m = re.findall('<td class="headerCovTableEntry">([\d\/\s]+)<', line)
+                m = re.findall(r'<td class="headerCovTableEntry">([\d\/\s]+)<', line)
                 if m:
                     results += [m[0]]
 
@@ -199,7 +199,7 @@ class Libfuzz:
         cwd = outpath
         my_env = os.environ
         my_env["LD_LIBRARY_PATH"] = os.path.abspath(
-            "./test_lib/" + Fuzzer.test_library + "/build_ss"
+            "/work/" + Fuzzer.test_library
         )
         return [command, my_env, cwd]
 

@@ -650,7 +650,7 @@ class BuildLog:
         # ) as f:
         #     self.compile_commands = json.load(f)
         # if not self.compile_commands:
-        with open(temp_loc + "/compile_commands.json", "r", encoding="UTF-8") as f:
+        with open("/work/compile_commands.json", "r", encoding="UTF-8") as f:
             self.compile_commands = json.load(f)
         self.process_compile_commands()
 
@@ -673,7 +673,7 @@ class BuildLog:
                         location = fentry[2:]
                         modfentry = os.path.normpath(
                             os.path.join(
-                                os.path.abspath(f"./test_lib/{test_library}/build_ss"),
+                                os.path.abspath(f"/src/{test_library}"),
                                 location,
                             )
                         )
@@ -698,7 +698,7 @@ class BuildLog:
         for detail in self.processed_commands:
             if file_loc and os.path.normpath(
                 os.path.join(detail["directory"], detail["source"])
-            ).replace("/build_ss/", "/") == file_loc.replace("/build_ss/", "/"):
+            ) == file_loc:
                 link_set, additional_linker = self.get_links_from_raw_logs(
                     detail["source"], detail["output"]
                 )
@@ -799,9 +799,7 @@ class BuildLog:
             #     )
             # else:
             hope_target = (
-                compilation_db_entry["file"]
-                .replace("/build_ss/", "/")
-                .replace(details["directory"].rsplit("/", 1)[0] + "/", "")
+                os.path.basename(compilation_db_entry["file"])
             )
             details["source"] = hope_target
             # Required when -o option not used

@@ -34,9 +34,6 @@ for line in static_lines:
     if target_name.strip() == "":
         continue
 
-    if "build_ss" in line:
-        continue
-
     if line not in unique:
         targets.append(line)
         unique[line] = 1

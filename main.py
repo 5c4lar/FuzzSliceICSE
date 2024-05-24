@@ -21,48 +21,10 @@ from build_log_parser import BuildLog
 from fuzz import Fuzzer
 from fuzz_gen import Generator
 from srcml import Srcml, get_name
+from parse_dwarf import extract_callees
+from settings import *
 
-with open("config.yaml", "r") as f:
-    config = yaml.safe_load(f)
-test_library = config["test_library"]
-# Use 0 for libfuzzer and 1 for AFL
-fuzz_tool = config["fuzz_tool"]
-bug_timeline_targets_run = config["bug_timeline_targets_run"]
-log_report = config["log_report"]
-
-
-# cc = "gcc -g -O0 -w -fprofile-generate"
-primary_cc = "afl-clang-fast -g -O0 -w -fprofile-instr-generate -fcoverage-mapping"
-cc = primary_cc
-# cxx = "clang++"
 logs: BuildLog
-
-# TODO this needs to be constructed dynamically
-includes_locations = (
-    os.path.abspath(f"./test_lib/{test_library}/include"),
-    os.path.abspath(f"./test_lib/{test_library}"),
-    os.path.abspath(f"./test_lib/{test_library}/apps"),
-    os.path.abspath(f"./test_lib/{test_library}/apps/include"),
-    os.path.abspath(f"./test_lib/{test_library}/testcasesupport"),
-)
-
-lib_clone_location = f"./test_lib/{test_library}"
-lib_info_location = f"./info_lib/{test_library}"
-temp_loc = os.path.abspath(os.path.join(lib_clone_location, "build_ss"))
-test_location = f"./workspace/{test_library}/test_files"
-rats_log = f"./info_lib/{test_library}/rats_logs"
-pickle_name = test_library.replace("/", "_")
-pickler = f"./info_lib/{test_library}/{pickle_name}"
-unrefined_targets = f"./info_lib/{test_library}/targets-unrefined.txt"
-targets = f"./info_lib/{test_library}/targets.txt"
-build_log = f"./info_lib/{test_library}/build_logs_fixed"
-xml_location = f"./info_lib/{test_library}/srcml.xml"
-out_location = f"./info_lib/{test_library}/out"
-std_out_location = f"./info_lib/{test_library}/out.txt"
-log_location = f"./info_lib/{test_library}_log.txt"
-
-delim = ".@."
-
 
 class Issue:
     subissue_filemap = {}
@@ -838,21 +800,22 @@ def create_build_log(raw_log):
     # my_env["CC"] = f"gcc -save-temps"
     # my_env["CXX"] = f"g++ -save-temps"
     if not os.path.exists(temp_loc):
-        os.makedirs(temp_loc)
+        os.makedirs(temp_loc, exist_ok=True)
     # make clean removed since it no longer handles all the files in this dir without mod
+    # subprocess.run(
+    #     'CC="clang -save-temps" CXX="clang++ -save-temps" ../configure',
+    #     # env=my_env,
+    #     cwd=lib_clone_location,
+    #     # stdout=devnull,
+    #     # stderr=e,
+    #     shell=True,
+    # )
+    my_env = os.environ.copy()
+    my_env["CFLAGS"]="-save-temps -g3"
     subprocess.run(
-        'CC="clang -save-temps" CXX="clang++ -save-temps" ../configure',
-        # env=my_env,
-        cwd=temp_loc,
-        # stdout=devnull,
-        # stderr=e,
-        shell=True,
-    )
-
-    subprocess.run(
-        f"bear make all > {os.path.abspath(raw_log)} 2>&1",
-        # env=my_env,
-        cwd=temp_loc,
+        f"bear --config {bear_config_path} --output /work/compile_commands.json -- compile > {os.path.abspath(raw_log)} 2>&1",
+        env=my_env,
+        cwd=lib_clone_location,
         # stdout=c,
         # stderr=e,
         shell=True,
@@ -864,6 +827,7 @@ def create_build_log(raw_log):
 
 def fix_build_log():
     raw_log = build_log.replace("_fixed", "")
+    pathlib.Path(raw_log).unlink(missing_ok=True)
     if not os.path.exists(raw_log):
         create_build_log(raw_log)
     # DOES NOT WORK PROPERLY COMPARED TO BEAR
@@ -1136,11 +1100,11 @@ def prep_preprocessed_output(location):
                                 os.path.join(lib_clone_location, append_name), "r"
                             )
                         elif os.path.isfile(
-                            os.path.join(lib_clone_location, "build_ss", append_name)
+                            os.path.join(lib_clone_location, append_name)
                         ):
                             orig_file = open(
                                 os.path.join(
-                                    lib_clone_location, "build_ss", append_name
+                                    lib_clone_location, append_name
                                 )
                             )
                         else:
@@ -1191,9 +1155,36 @@ def remove_linemarkers(inputFileName):
             if not line.lstrip().startswith("// "):
                 fp.write(line)
 
+def create_targets(elf):
+    results = extract_callees(elf, 'LLVMFuzzerTestOneInput')
+    targets = []
+    for _, (name, file, line) in results.items():
+        if file.startswith(f'/src/{test_library}/'):
+            targets.append(f'{file}:{line} : :{name}')
+    return targets, results
+
+def parse_all_targets():
+    all_targets = []
+    info = {}
+    # enumerate all files in fuzzer out directory
+    for file in os.listdir(fuzzer_location):
+        # keep only elf files
+        if file.endswith(".zip"):
+            continue
+        elf = os.path.join(fuzzer_location, file)
+        elf_targets, elf_info = create_targets(elf)
+        if not elf_targets:
+            continue
+        info[file] = elf_info
+        all_targets.extend(elf_targets)
+    with open(info_path, "w") as f:
+        json.dump(info, f)
+    with open(targets, "w") as f:
+        f.writelines([f'{target}\n' for target in all_targets])
 
 if __name__ == "__main__":
     os.makedirs(lib_info_location, exist_ok=True)
+    pathlib.Path(build_log).unlink(missing_ok=True)
     if not os.path.exists(build_log):
         fix_build_log()
     # if not os.path.exists(rats_log):
@@ -1215,9 +1206,12 @@ if __name__ == "__main__":
         with open(pickler, "rb") as pickle_f:
             lib_srcml = pickle.load(pickle_f)
     issues = []
+    pathlib.Path(targets).unlink(missing_ok=True)
+    if not os.path.exists(targets):
+        parse_all_targets()
     with open(targets, "r", encoding="UTF-8") as f:
         for line in f.readlines():
-            if line.startswith("#") or not line.startswith("./"):
+            if line.startswith("#"):
                 continue
             location_info = line.split(" ")[0]
             file_tloc, lineno, *_ = location_info.split(":")

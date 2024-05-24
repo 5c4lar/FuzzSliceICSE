@@ -7,6 +7,7 @@ import xml.etree.ElementTree as ET
 import numpy as np
 
 from lxml import etree
+from settings import temp_loc
 
 primitives = ["int", "float", "double", "char", "bool", "enum"]
 disallowed_names = ["size_t"]
@@ -493,10 +494,8 @@ def compilebinary(file, compile_command, link_command):
     # args = ("gcc", file, "-w", "-g", "-I", "../openssl/include", "-I", "../openssl/ssl", "-I", "../openssl/", "-I", "../openssl/apps/include", "-o", "./a.out")
     global tmp_dir
     my_env = os.environ
-    repository = re.search('workspace/(.+?)/test_files', file).group(1)
-    my_env["LD_LIBRARY_PATH"] = os.path.abspath(
-             "./test_lib/" + repository + "/build_ss"
-    )
+    # repository = re.search('/work/(.+?)/test_files', file).group(1)
+    my_env["LD_LIBRARY_PATH"] = temp_loc
     for c in compile_command:
         args = shlex.split(c, posix=False)
         for i, arg in enumerate(args):
@@ -507,7 +506,7 @@ def compilebinary(file, compile_command, link_command):
         args = list(filter(None, args))
         cmd = " ".join(args)
         popen = subprocess.Popen(
-            cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True, env=my_env
+            cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True, env=my_env, cwd=tmp_dir
         )
         popen.wait()
         output = popen.stderr.read().decode("utf-8")
