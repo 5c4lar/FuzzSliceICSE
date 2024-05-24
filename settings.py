@@ -2,15 +2,15 @@ import yaml
 import os
 from build_log_parser import BuildLog
     
-with open("config.yaml", "r") as f:
-    config = yaml.safe_load(f)
-test_library = config["test_library"]
-# Use 0 for libfuzzer and 1 for AFL
-fuzz_tool = config["fuzz_tool"]
-bug_timeline_targets_run = config["bug_timeline_targets_run"]
-log_report = config["log_report"]
-
-
+test_library=os.environ.get("PROJECT")
+fuzz_tool=0
+bug_timeline_targets_run=False
+timeout=10
+hard_timeout=1800
+max_length_fuzz_bytes=15000
+parallel_execution=False
+crash_limit=1000
+log_report=True
 # cc = "gcc -g -O0 -w -fprofile-generate"
 primary_cc = "afl-clang-fast -g -O0 -w -fprofile-instr-generate -fcoverage-mapping"
 cc = primary_cc
