@@ -815,7 +815,7 @@ def create_build_log(raw_log):
     subprocess.run(
         f"bear --config {bear_config_path} --output /work/compile_commands.json -- compile > {os.path.abspath(raw_log)} 2>&1",
         env=my_env,
-        cwd='/src',
+        # cwd='/src',
         # stdout=c,
         # stderr=e,
         shell=True,
