@@ -10,13 +10,11 @@ import yaml
 
 import numpy as np
 from loguru import logger
+from settings import test_library
 
 keep_gcc_include_fixed = False
 keep_gcc_intrin = False
 
-with open("config.yaml", "r") as f:
-    config = yaml.safe_load(f)
-test_library = config["test_library"]
 
 def get_language_map(extension):
     # TODO: There are even more in the man page of gcc.

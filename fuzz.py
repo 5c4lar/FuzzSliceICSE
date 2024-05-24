@@ -16,16 +16,7 @@ import timeout_decorator
 import psutil
 from loguru import logger
 
-with open("config.yaml", "r") as f:
-    config = yaml.safe_load(f)
-# The time for which Fuzzer runs
-timeout = config["timeout"]
-# Max length of fuzz bytes
-max_length_fuzz_bytes = config["max_length_fuzz_bytes"]
-# Allow multiprocessing for issues
-parallel_execution = config["parallel_execution"]
-crash_limit = config["crash_limit"]
-hard_timeout = config["hard_timeout"]
+from settings import *
 
 # Deprecated - please use libfuzz until this is re-enabled
 class Aflfuzz:
