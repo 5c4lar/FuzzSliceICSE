@@ -1,7 +1,4 @@
-import yaml
-import os
-from build_log_parser import BuildLog
-    
+import os    
 test_library=os.environ.get("PROJECT")
 fuzz_tool=0
 bug_timeline_targets_run=False
