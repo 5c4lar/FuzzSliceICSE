@@ -249,15 +249,15 @@ class Libfuzz:
             if line.strip() == "":
                 print_status = 0
 
-            match_all_lines = re.search("\d\|.*\|", line)
+            match_all_lines = re.search(r"\d\|.*\|", line)
             if match_all_lines:
                 count = count + 1
 
-            match_zero_lines = re.search("\d\|      0\|", line)
+            match_zero_lines = re.search(r"\d\|      0\|", line)
             if match_zero_lines:
                 count_not_covered = count_not_covered + 1
 
-            match_cannot_cover_lines = re.search("\d\|       \|", line)
+            match_cannot_cover_lines = re.search(r"\d\|       \|", line)
             if match_cannot_cover_lines:
                 count_impossible_to_cover = count_impossible_to_cover + 1
 
@@ -444,10 +444,10 @@ class Fuzzer:
         dyn_size = 0
         for line in lines:
             if "// Buff size :" in line:
-                m = re.search("Buff size : ([\d]*) ", line)
+                m = re.search(r"Buff size : ([\d]*) ", line)
                 if m:
                     fixed_size = int(m.group(1))
-                m = re.search("Dyn size : ([\d]*)", line)
+                m = re.search(r"Dyn size : ([\d]*)", line)
                 if m:
                     dyn_size = int(m.group(1))
         # Max 1000 bytes per fixed object and 10000 bytes for dynamic objects
