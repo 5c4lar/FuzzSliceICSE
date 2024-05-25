@@ -406,7 +406,7 @@ class Fuzzer:
         issue = ""
         crash_detected = 0
         for line in lines:
-            m = re.findall("==ERROR: AddressSanitizer: ([\w-]+)", line)
+            m = re.findall(r"==ERROR: AddressSanitizer: ([\w-]+)", line)
             if m:
                 issue = m[0]
                 crash_detected = 1
