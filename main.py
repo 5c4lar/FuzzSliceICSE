@@ -22,6 +22,7 @@ from fuzz import Fuzzer
 from fuzz_gen import Generator
 from srcml import Srcml, get_name
 from parse_dwarf import extract_callees
+from extract_function import extract
 from settings import *
 
 logs: BuildLog
@@ -221,7 +222,8 @@ def run_srcml(target, out, lib_src=None):
 
 def get_final(target, out):
     if os.path.exists(out):
-        return
+        # return
+        pathlib.Path(out).unlink(missing_ok=True)
     result = subprocess.run(["srcml", target, "-o", out], stderr=subprocess.PIPE)
     if result.stderr:
         logger.error(result.stderr.decode())
@@ -1181,10 +1183,11 @@ def parse_all_targets():
         json.dump(info, f)
     with open(targets, "w") as f:
         f.writelines([f'{target}\n' for target in all_targets])
+    return info
 
 if __name__ == "__main__":
     os.makedirs(lib_info_location, exist_ok=True)
-    pathlib.Path(build_log).unlink(missing_ok=True)
+    # pathlib.Path(build_log).unlink(missing_ok=True)
     if not os.path.exists(build_log):
         fix_build_log()
     # if not os.path.exists(rats_log):
@@ -1206,7 +1209,7 @@ if __name__ == "__main__":
         with open(pickler, "rb") as pickle_f:
             lib_srcml = pickle.load(pickle_f)
     issues = []
-    pathlib.Path(targets).unlink(missing_ok=True)
+    # pathlib.Path(targets).unlink(missing_ok=True)
     if not os.path.exists(targets):
         parse_all_targets()
     with open(targets, "r", encoding="UTF-8") as f:
@@ -1222,4 +1225,16 @@ if __name__ == "__main__":
         analyze(lib_srcml, issues)
     else:
         for issue in issues:
+            functions = issue.functions
+            test_file_path = issue.test_file_path
+            logger.info(f"Analyzing {test_file_path} for {functions}")
             analyze(lib_srcml, [issue])
+            if not os.path.exists(test_file_path):
+                continue
+            for function in functions:
+                extract(test_file_path, function, test_file_path[:-2])
+    info = json.load(open(info_path, "r"))
+    for binary_path, functions in info.items():
+        for addr, (name, file, line) in functions.items():
+            if file.startswith(f'/src/{test_library}/'):
+                logger.info(f'{file}:{line} : :{name} : {addr}')

@@ -66,8 +66,11 @@ def parse_args():
     return parser.parse_args()
 
 def extract_callees(binary_path, function_name):
-    binary = lief.parse(binary_path)
-    ELF = ELFFile(open(binary_path, 'rb'))
+    try:
+        binary = lief.parse(binary_path)
+        ELF = ELFFile(open(binary_path, 'rb'))
+    except:
+        return {}
     if not ELF.has_dwarf_info():
         print("No DWARF info found")
     dwarf_info = ELF.get_dwarf_info()
