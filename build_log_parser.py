@@ -635,6 +635,15 @@ class OptionIterator:
     def item(self):
         return self._item
 
+def recursive_split(input_str):
+    try:
+        tokens = shlex.split(input_str)
+        for i, token in enumerate(tokens):
+            if ' ' in token and not (token.startswith("'") and token.endswith("'")) and not (token.startswith('"') and token.endswith('"')):
+                tokens[i:i+1] = recursive_split(token)
+    except:
+        tokens = []
+    return tokens
 
 class BuildLog:
     def __init__(self, build_log, temp_loc, lib_clone_location) -> None:
@@ -657,8 +666,8 @@ class BuildLog:
         all_object_files = set()
         compile_locs = set()
         for line in self.raw_data.split("\n"):
-            if " -c " not in line:
-                entries = line.split()
+            if " -c " not in line and not line.startswith("checking"):
+                entries = recursive_split(line)
                 for i in range(len(entries)):
                     fentry = entries[i]
                     if fentry == "-o":
@@ -707,6 +716,7 @@ class BuildLog:
                 all_compiles_encountered.append(detail)
         compile_detail = all_compiles_encountered[0]
         # compile_command = ["gcc"] + compile_detail["analyzer_options"] + ["-o", "/dev/null"]
+        logger.info("Additional linker options: {}", additional_linker)
         return (
             compile_detail["analyzer_options"],
             link_dependencies,
