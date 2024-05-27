@@ -716,7 +716,6 @@ class BuildLog:
                 all_compiles_encountered.append(detail)
         compile_detail = all_compiles_encountered[0]
         # compile_command = ["gcc"] + compile_detail["analyzer_options"] + ["-o", "/dev/null"]
-        logger.info("Additional linker options: {}", additional_linker)
         return (
             compile_detail["analyzer_options"],
             link_dependencies,

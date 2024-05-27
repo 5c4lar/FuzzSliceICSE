@@ -51,7 +51,7 @@ class Issue:
         #         test_file_path
         #     )
         p = pathlib.Path(file_tloc)
-        ref_loc = str(p.relative_to(*p.parts[:2]))
+        ref_loc = str(p.relative_to(os.path.join(*p.parts[:2])))
         self.id = file_tloc
         self.testname = test_name(file_loc, line)
         self.ref_loc = ref_loc
@@ -338,6 +338,10 @@ def find_defs(missing_file_defs, all_defs, concat_locations):
                         get_inf[file].append("struct " + req)
                         logger.debug("Found {} in {}", "struct " + req, file)
                         retrieved.add(req)
+                    elif info.get("_decl_" + req):
+                        get_inf[file].append("_decl_" + req)
+                        logger.debug("Found {} in {}", "_decl_" + req, file)
+                        retrieved.add(req)
                     # The check prevents function declarations from being picked as well
                     # fails if reassigned like ctx->func.emit = poly1305_emit
                     elif req not in calls_in_file and info.get(req):
@@ -486,7 +490,7 @@ def minimize_target(lib_src, issue):
 
     unit_srcml.drop(drop_set, used_types)
 
-    unit_srcml.trim(req_functions[0], line)
+    # unit_srcml.trim(req_functions[0], line)
 
     unit_srcml.save(file_src)
     get_final(file_src, issue.test_file_path)
@@ -731,11 +735,34 @@ def linker_checks(issue, concat_locations, link=True, final=False):
         commands_used["loc"].append(loc)
         commands_used["compile"].append(command)
         result = subprocess.run(shlex.split(command), stderr=subprocess.PIPE)
-        # if result.stderr:
-        #     decoded_error = result.stderr.decode()
-        #     logger.error(decoded_error)
-        #     issue.add_final_data(commands_used, target_line)
-        #     return {}
+        if result.stderr:
+            decoded_error = result.stderr.decode()
+            dct = defaultdict(set)
+            for line in decoded_error.splitlines():
+                if not final and "Undefined symbols" in line:
+                    failed_symbol = re.compile('"([^"]+)", referenced from')
+                    matched = failed_symbol.findall(line)[0]
+                    filename_matched = line.rsplit(" in ")[-1]
+                    dct[filename_matched.strip()].add(matched)
+                if not final and "undefined reference to" in line:
+                    failed_symbol = re.compile("undefined reference to `([^`']+)'")
+                    matched = failed_symbol.findall(line)[0]
+                    if line.split(":")[0].endswith("ld"):
+                        filename_matched = line.split(":")[1]
+                    else:
+                        filename_matched = line.split(":")[0]
+                    dct[filename_matched.strip()].add(matched)
+                if not final and "undeclared identifier" in line:
+                    failed_symbol = re.compile("use of undeclared identifier '([^']+)'")
+                    matched = failed_symbol.findall(line)[0]
+                    filename_matched = line.split(":")[0]
+                    dct[filename_matched.strip()].add(matched)
+                    logger.debug("Undeclared identifier found: {}", matched)
+            if dct:
+                return dct
+            else:
+                logger.error(decoded_error)
+                return {}
     if not link:
         issue.add_final_data(commands_used, target_line)
         return {}
