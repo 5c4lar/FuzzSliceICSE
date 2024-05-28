@@ -1216,7 +1216,7 @@ def parse_all_targets():
 
 if __name__ == "__main__":
     os.makedirs(lib_info_location, exist_ok=True)
-    pathlib.Path(build_log).unlink(missing_ok=True)
+    # pathlib.Path(build_log).unlink(missing_ok=True)
     if not os.path.exists(build_log):
         fix_build_log()
     # if not os.path.exists(rats_log):
@@ -1238,8 +1238,8 @@ if __name__ == "__main__":
         with open(pickler, "rb") as pickle_f:
             lib_srcml = pickle.load(pickle_f)
     issues = []
-    pathlib.Path(targets).unlink(missing_ok=True)
-    pathlib.Path(info_path).unlink(missing_ok=True)
+    # pathlib.Path(targets).unlink(missing_ok=True)
+    # pathlib.Path(info_path).unlink(missing_ok=True)
     if not os.path.exists(info_path):
         info = parse_all_targets()
     else:
