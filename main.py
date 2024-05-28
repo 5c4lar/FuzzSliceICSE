@@ -1216,7 +1216,7 @@ def parse_all_targets():
 
 if __name__ == "__main__":
     os.makedirs(lib_info_location, exist_ok=True)
-    # pathlib.Path(build_log).unlink(missing_ok=True)
+    pathlib.Path(build_log).unlink(missing_ok=True)
     if not os.path.exists(build_log):
         fix_build_log()
     # if not os.path.exists(rats_log):
@@ -1238,7 +1238,8 @@ if __name__ == "__main__":
         with open(pickler, "rb") as pickle_f:
             lib_srcml = pickle.load(pickle_f)
     issues = []
-    # pathlib.Path(targets).unlink(missing_ok=True)
+    pathlib.Path(targets).unlink(missing_ok=True)
+    pathlib.Path(info_path).unlink(missing_ok=True)
     if not os.path.exists(info_path):
         info = parse_all_targets()
     else:
@@ -1246,106 +1247,109 @@ if __name__ == "__main__":
             info = json.load(f)
     with open(link_path, "r") as f:
         link_info_list = json.load(f)
-        link_info = {i['output']: i for i in link_info_list if'output' in i}
+        link_info = {os.path.basename(i['output']): i for i in link_info_list if'output' in i}
     for binary, target_functions in info.items():
-        link_command = link_info[os.path.join(fuzzer_location, binary)]
+        link_command = link_info[binary]
         for addr, (name, file, line) in target_functions.items():
             issue = Issue(test_location, file, str(line))
             analyze(lib_srcml, [issue])
             usage = {"func_name": name, "binary": binary}
-            if os.path.exists(issue.test_file_path):
-                target_dir = issue.test_file_path[:-2]
-                with open(target_dir + ".json", "rb") as f:
-                    logger.info(f"Processing {issue.test_file_path} for {name}")
-                    commands = json.load(f)
-                    preprocessed_path = os.path.join(target_dir, "preprocessed.c")
-                    idx = commands["loc"].index(issue.test_file_path)
-                    command = commands["compile"][idx]
-                    # replace the test file with the function file, change the output file to function.o
-                    command = command.replace(target_dir + ".o", preprocessed_path)
-                    # add the include path to the command
-                    command = command.replace(" -c ", f" -E ")
-                    logger.info(f"Preprocessing {issue.test_file_path} with {command}")
-                    result = subprocess.run(command, shell=True)
-                    if result.returncode != 0:
-                        logger.error(f"Failed to compile {function_source}")
-                        continue
-                    extract(preprocessed_path, name, target_dir)
-                    function_source = os.path.join(target_dir, "function.c")
-                    additional_include_path = target_dir
-                    idx = commands["loc"].index(issue.test_file_path)
-                    command = commands["compile"][idx]
-                    # replace the test file with the function file, change the output file to function.o
-                    command = command.replace(issue.test_file_path, function_source).replace(
-                        target_dir + ".o", os.path.join(target_dir, "function.o"))
-                    # add the include path to the command
-                    command = command.replace(" -c ", f" -c -I{additional_include_path} ")
-                    logger.info(f"Compiling {function_source} with {command}")
-                    usage['compile'] = command
-                    result = subprocess.run(command, shell=True)
-                    if result.returncode != 0:
-                        logger.error(f"Failed to compile {function_source}")
-                        continue
-                    remaining_source = os.path.join(target_dir, "remaining.c")
-                    command = commands["compile"][idx]
-                    command = command.replace(issue.test_file_path, remaining_source).replace(
-                        target_dir + ".o", os.path.join(target_dir, "remaining.o")
-                    )
-                    command = command.replace(" -c ", f" -c -I{additional_include_path} ")
-                    logger.info(f"Compiling {remaining_source} with {command}")
-                    result = subprocess.run(command, shell=True)
-                    if result.returncode != 0:
-                        logger.error(f"Failed to compile {remaining_source}")
-                        continue
+            if not os.path.exists(issue.test_file_path):
+                continue
+            target_dir = issue.test_file_path[:-2]
+            if not os.path.exists(target_dir + ".json"):
+                continue
+            with open(target_dir + ".json", "rb") as f:
+                logger.info(f"Processing {issue.test_file_path} for {name}")
+                commands = json.load(f)
+                preprocessed_path = os.path.join(target_dir, "preprocessed.c")
+                idx = commands["loc"].index(issue.test_file_path)
+                command = commands["compile"][idx]
+                # replace the test file with the function file, change the output file to function.o
+                command = command.replace(target_dir + ".o", preprocessed_path)
+                # add the include path to the command
+                command = command.replace(" -c ", f" -E ")
+                logger.info(f"Preprocessing {issue.test_file_path} with {command}")
+                result = subprocess.run(command, shell=True)
+                if result.returncode != 0:
+                    logger.error(f"Failed to compile {function_source}")
+                    continue
+                extract(preprocessed_path, name, target_dir)
+                function_source = os.path.join(target_dir, "function.c")
+                additional_include_path = target_dir
+                idx = commands["loc"].index(issue.test_file_path)
+                command = commands["compile"][idx]
+                # replace the test file with the function file, change the output file to function.o
+                command = command.replace(issue.test_file_path, function_source).replace(
+                    target_dir + ".o", os.path.join(target_dir, "function.o"))
+                # add the include path to the command
+                command = command.replace(" -c ", f" -c -I{additional_include_path} ")
+                logger.info(f"Compiling {function_source} with {command}")
+                usage['compile'] = command
+                result = subprocess.run(command, shell=True)
+                if result.returncode != 0:
+                    logger.error(f"Failed to compile {function_source}")
+                    continue
+                remaining_source = os.path.join(target_dir, "remaining.c")
+                command = commands["compile"][idx]
+                command = command.replace(issue.test_file_path, remaining_source).replace(
+                    target_dir + ".o", os.path.join(target_dir, "remaining.o")
+                )
+                command = command.replace(" -c ", f" -c -I{additional_include_path} ")
+                logger.info(f"Compiling {remaining_source} with {command}")
+                result = subprocess.run(command, shell=True)
+                if result.returncode != 0:
+                    logger.error(f"Failed to compile {remaining_source}")
+                    continue
+                
+                orig_link_command = commands["link"][0]
+                # get all .o files path in the command
+                orig_link_command_args = orig_link_command.split()
+                object_files = [arg for arg in orig_link_command_args if arg.endswith(".o")] + [os.path.join(target_dir, "remaining.o")]
+                # remove the test file from the object files
+                object_files.remove(issue.test_file_path[:-2] + ".o")
+                command = f"ar rcs {os.path.join(target_dir, 'libremaining.a')} {' '.join(object_files)}"
+                logger.info(f"Archiving {object_files} with {command}")
+                result = subprocess.run(command, shell=True)
+                if result.returncode != 0:
+                    logger.error(f"Failed to archieve {object_files}")
+                    continue
+                # create shared library of the function file
+                command = f"clang -shared -L{target_dir} -Wl,--whole-archive,{os.path.join(target_dir, 'libremaining.a')} -Wl,--no-whole-archive {os.path.join(target_dir, 'function.o')} -o {os.path.join(target_dir, 'libfunction.so')}"
+                logger.info(f"Creating shared library of {function_source} with {command}")
+                result = subprocess.run(command, shell=True)
+                if result.returncode != 0:
+                    logger.error(f"Failed to link shared {function_source}")  
+                    continue                
+                usage['build_shared'] = command  
+                
+                link_command_args = link_command["arguments"]
+                # additional_args = [f"-Wl,-rpath,{target_dir} -L{target_dir}", f"-lfunction"]
+                additional_args = [f"-L{target_dir}", f"-lfunction"]
+                # insert the additional arguments to the link_commands args at index 1
+                link_command_args = link_command_args[:1] + additional_args + link_command_args[1:]
+                fuzzer_path = os.path.join(target_dir, "fuzzer")
+                # run the link command
+                command = " ".join(link_command_args).replace(link_command["output"], fuzzer_path)
+                logger.info(f"Linking {function_source} with {command}")
+                result = subprocess.run(command, shell=True)
+                if result.returncode != 0:
+                    logger.error(f"Failed to link {function_source}")
+                    continue
+                logger.success(f"Successfully linked {function_source}")
+                usage['link'] = command
+                usage['remaining_path'] = os.path.join(target_dir, 'libremaining.a')
+                usage['header_path'] = os.path.join(target_dir, 'header.h')
+                usage['commands'] = commands
+                with open(os.path.join(target_dir, 'usage.json'), 'w') as f:
+                    json.dump(usage, f)
+                # copy necessary files to output directory
+                output_dir = target_dir.replace(lib_info_location, fuzzer_location)
+                os.makedirs(output_dir, exist_ok=True)
+                shutil.copy(fuzzer_path, output_dir)
+                shutil.copy(os.path.join(target_dir, 'libremaining.a'), output_dir)
+                shutil.copy(os.path.join(target_dir, 'libfunction.so'), output_dir)
+                shutil.copy(os.path.join(target_dir, 'header.h'), output_dir)
+                shutil.copy(os.path.join(target_dir, 'usage.json'), output_dir)
+                shutil.copy(os.path.join(target_dir, 'function.c'), output_dir)
                     
-                    orig_link_command = commands["link"][0]
-                    # get all .o files path in the command
-                    orig_link_command_args = orig_link_command.split()
-                    object_files = [arg for arg in orig_link_command_args if arg.endswith(".o")] + [os.path.join(target_dir, "remaining.o")]
-                    # remove the test file from the object files
-                    object_files.remove(issue.test_file_path[:-2] + ".o")
-                    command = f"ar rcs {os.path.join(target_dir, 'libremaining.a')} {' '.join(object_files)}"
-                    logger.info(f"Archiving {object_files} with {command}")
-                    result = subprocess.run(command, shell=True)
-                    if result.returncode != 0:
-                        logger.error(f"Failed to archieve {object_files}")
-                        continue
-                    # create shared library of the function file
-                    command = f"clang -shared -L{target_dir} -Wl,--whole-archive,{os.path.join(target_dir, 'libremaining.a')} -Wl,--no-whole-archive {os.path.join(target_dir, 'function.o')} -o {os.path.join(target_dir, 'libfunction.so')}"
-                    logger.info(f"Creating shared library of {function_source} with {command}")
-                    result = subprocess.run(command, shell=True)
-                    if result.returncode != 0:
-                        logger.error(f"Failed to link shared {function_source}")  
-                        continue                
-                    usage['build_shared'] = command  
-                    
-                    link_command_args = link_command["arguments"]
-                    # additional_args = [f"-Wl,-rpath,{target_dir} -L{target_dir}", f"-lfunction"]
-                    additional_args = [f"-L{target_dir}", f"-lfunction"]
-                    # insert the additional arguments to the link_commands args at index 1
-                    link_command_args = link_command_args[:1] + additional_args + link_command_args[1:]
-                    fuzzer_path = os.path.join(target_dir, "fuzzer")
-                    # run the link command
-                    command = " ".join(link_command_args).replace(link_command["output"], fuzzer_path)
-                    logger.info(f"Linking {function_source} with {command}")
-                    result = subprocess.run(command, shell=True)
-                    if result.returncode != 0:
-                        logger.error(f"Failed to link {function_source}")
-                        continue
-                    logger.success(f"Successfully linked {function_source}")
-                    usage['link'] = command
-                    usage['remaining_path'] = os.path.join(target_dir, 'libremaining.a')
-                    usage['header_path'] = os.path.join(target_dir, 'header.h')
-                    usage['commands'] = commands
-                    with open(os.path.join(target_dir, 'usage.json'), 'w') as f:
-                        json.dump(usage, f)
-                    # copy necessary files to output directory
-                    output_dir = target_dir.replace(lib_info_location, fuzzer_location)
-                    os.makedirs(output_dir, exist_ok=True)
-                    shutil.copy(fuzzer_path, output_dir)
-                    shutil.copy(os.path.join(target_dir, 'libremaining.a'), output_dir)
-                    shutil.copy(os.path.join(target_dir, 'libfunction.so'), output_dir)
-                    shutil.copy(os.path.join(target_dir, 'header.h'), output_dir)
-                    shutil.copy(os.path.join(target_dir, 'usage.json'), output_dir)
-                    shutil.copy(os.path.join(target_dir, 'function.c'), output_dir)
-                        
